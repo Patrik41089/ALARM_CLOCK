@@ -1,45 +1,109 @@
+//knihovny
 #include <stdbool.h>
 #include <stm8s.h>
-//#include <stdio.h>
+#include <stdio.h>
 #include "main.h"
 #include "milis.h"
-//#include "delay.h"
-//#include "uart1.h"
+#include "delay.h"
+#include "uart1.h"
 
-void init(void)
+#define BUZZER_PIN GPIO_PIN_7
+#define BUZZER_PORT GPIOB
+//int8_t minule = 0;
+
+//init buzzeru
+void buzzer(void)
 {
-    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);      // taktovani MCU na 16MHz
-
-    GPIO_Init(LED_PORT, LED_PIN, GPIO_MODE_OUT_PP_LOW_SLOW);
-#if defined (BTN_PORT) || defined (BTN_PIN)
-    GPIO_Init(BTN_PORT, BTN_PIN, GPIO_MODE_IN_FL_NO_IT);
-#endif
-
-    init_milis();
-    //init_uart1();
+  GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
+  BEEP_Init(BEEP_FREQUENCY_4KHZ);
 }
-
 
 int main(void)
 {
-  
-    uint32_t time = 0;
+  bool zvuk = false;
+  int32_t time1 = 0;
+  int32_t time2 = 0;
+  buzzer();
 
-    init();
-
-    while (1) {
-#if defined (BTN_PORT) && defined (BTN_PIN)
-        if (milis() - time > 333 && !PUSH(BTN)) {
-#else
-        if (milis() - time > 333 ) {
-#endif
-            REVERSE(LED); 
-            time = milis();
-            //printf("%ld\n", time);
-        }
-        //delay_ms(333);
+  while(1){
+    if(milis() - time1 > 500)
+    {
+      time1 = milis();
     }
+  }
 }
+
 
 /*-------------------------------  Assert -----------------------------------*/
 #include "__assert__.h"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* //časovač tim2
+void casovac1(void)
+{
+  CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+  TIM2_TimeBaseInit(TIM2_PRESCALER_16, 10000 - 1);
+  TIM2_Cmd(ENABLE);
+  TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);
+  init_milis();
+}
+ */
+
+
+
+/* void pipani(void)
+{
+  if(minule == 0)
+  {
+    GPIO_WriteHigh(BUZZER_PORT, BUZZER_PIN);
+    minule = 1;
+  }
+  else
+  {
+    GPIO_WriteLow(BUZZER_PORT, BUZZER_PIN);
+    minule = 0;
+  }
+} */
+
+
+
+
+
+/* void uart(void)
+{
+    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);      // taktovani MCU na 16MHz
+
+    UART1_DeInit();
+    UART1_Init(
+      9600,
+      UART1_WORDLENGTH_8D,
+      UART1_STOPBITS_1,
+      UART1_PARITY_NO,
+      UART1_SYNCMODE_CLOCK_DISABLE,
+      UART1_MODE_TXRX_ENABLE
+    );
+    
+    enableInterrupts();
+    UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);
+}
+
+int putchar(int x){
+  while(UART1_GetFlagStatus(UART1_FLAG_TXE) == RESET)
+  ;
+  UART1_SendData8(x);
+  return(x);
+
+} */
+
