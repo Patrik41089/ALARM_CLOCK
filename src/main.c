@@ -7,32 +7,42 @@
 #include "delay.h"
 #include "uart1.h"
 
-#define BUZZER_PIN GPIO_PIN_7
-#define BUZZER_PORT GPIOB
-//int8_t minule = 0;
 
-//init buzzeru
-void buzzer(void)
+#define BUZZER_PIN GPIO_PIN_?
+#define BUZZER_PORT GPIO?
+
+//inicializace
+void init(void) {
+    GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
+    init_milis();
+}
+//inicializace casovace TIM2
+void casovac(void)
 {
-  GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
-  BEEP_Init(BEEP_FREQUENCY_4KHZ);
+    TIM2_DeInit();
+    TIM2_TimeBaseInit(TIM2_PRESCALER_16, 250 - 1);
+    TIM2_OC2Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, 500, TIM2_OCPOLARITY_HIGH);
+    TIM2_OC2PreloadConfig(ENABLE);
+    TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);
+    TIM2_Cmd(ENABLE);
+
 }
 
 int main(void)
 {
-  bool zvuk = false;
-  int32_t time1 = 0;
-  int32_t time2 = 0;
-  buzzer();
+  int32_t time = 0;
 
-  while(1){
-    if(milis() - time1 > 500)
+  init();
+  casovac();
+
+  while(1)
+  {
+    if(milis() - time > 500)
     {
-      time1 = milis();
+      time = milis();
     }
   }
 }
-
 
 /*-------------------------------  Assert -----------------------------------*/
 #include "__assert__.h"
@@ -50,60 +60,6 @@ int main(void)
 
 
 
-/* //časovač tim2
-void casovac1(void)
-{
-  CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
-  TIM2_TimeBaseInit(TIM2_PRESCALER_16, 10000 - 1);
-  TIM2_Cmd(ENABLE);
-  TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);
-  init_milis();
-}
- */
 
 
-
-/* void pipani(void)
-{
-  if(minule == 0)
-  {
-    GPIO_WriteHigh(BUZZER_PORT, BUZZER_PIN);
-    minule = 1;
-  }
-  else
-  {
-    GPIO_WriteLow(BUZZER_PORT, BUZZER_PIN);
-    minule = 0;
-  }
-} */
-
-
-
-
-
-/* void uart(void)
-{
-    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);      // taktovani MCU na 16MHz
-
-    UART1_DeInit();
-    UART1_Init(
-      9600,
-      UART1_WORDLENGTH_8D,
-      UART1_STOPBITS_1,
-      UART1_PARITY_NO,
-      UART1_SYNCMODE_CLOCK_DISABLE,
-      UART1_MODE_TXRX_ENABLE
-    );
-    
-    enableInterrupts();
-    UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);
-}
-
-int putchar(int x){
-  while(UART1_GetFlagStatus(UART1_FLAG_TXE) == RESET)
-  ;
-  UART1_SendData8(x);
-  return(x);
-
-} */
 
