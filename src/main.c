@@ -8,40 +8,68 @@
 #include "uart1.h"
 
 
-#define BUZZER_PIN GPIO_PIN_?
-#define BUZZER_PORT GPIO?
+
 
 //inicializace
-void init(void) {
-    GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
-    init_milis();
-}
-//inicializace casovace TIM2
-void casovac(void)
+void init(void)
 {
-    TIM2_DeInit();
-    TIM2_TimeBaseInit(TIM2_PRESCALER_16, 250 - 1);
-    TIM2_OC2Init(TIM2_OCMODE_PWM1, TIM2_OUTPUTSTATE_ENABLE, 500, TIM2_OCPOLARITY_HIGH);
-    TIM2_OC2PreloadConfig(ENABLE);
-    TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);
-    TIM2_Cmd(ENABLE);
+  CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+  init_milis();
 
+  //I2C
+  I2C_DeInit();
+  I2C_Init(100000,  //frekvence výstupní pro komunikaci I2C
+  0x00,             //(slave) adresa I2C, hodnota mě nezajímá, protože mám mikrokontrolér jako MASTER
+  I2C_DUTYCYCLE_2,  //trvání LOW a HIGH (tady to je 1:1, 16:9 je ještě možné vybrat)
+  I2C_ACK_CURR,     //povolení signálu, když příjmu data, mikrokontrolér odešle ACK
+  I2C_ADDMODE_7BIT, //pro RTC mi stačí 7bit adresa 0x68, možnost ještě 10bit
+  16000000);        //taktování procesoru =>cmám na 16Mhz
+  I2C_Cmd(ENABLE);  //povolím I2C
+
+  //UART
+  UART1_DeInit();
+  UART1_Init(9600,                    //baudrate = komunikační rychlost
+   UART1_WORDLENGTH_8D,               //délka slova
+    UART1_STOPBITS_1,                 //stopbit (pauza pro konec přenosu)
+     UART1_PARITY_NO,                 //parita (kontrola chyb)
+      UART1_SYNCMODE_CLOCK_DISABLE,   //asynchronní (nepoužívám clock, jednodušší a častější, používám baudrate pro komunikaci (tx a rx kanály))
+       UART1_MODE_TXRX_ENABLE         //přijímám a odesílám
+       );
+
+  enableInterrupts();                         //globálně povolím přerušení
+  UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);   //povolení přetečení u RX
+  UART1_Cmd(ENABLE);                          //povolím uart
 }
 
-int main(void)
+/* void cteni_i2c(void)
 {
-  int32_t time = 0;
+  int32_t info;
+  I2C_GenerateSTART(ENABLE); //začátek komunikace
 
-  init();
-  casovac();
+  I2C_GenerateSTOP(ENABLE);  //konec komunikace
 
-  while(1)
-  {
-    if(milis() - time > 500)
-    {
-      time = milis();
+} */
+
+/* void zapis_i2c(void)
+{
+  I2C_GenerateSTART(ENABLE); //začátek komunikace
+  
+  I2C_GenerateSTOP(ENABLE);  //konec komunikace
+} */
+
+void main(void)
+{
+    uint32_t time = 0;
+
+    init();
+
+    while (1) {
+      if(milis() - time > 1000)
+      {
+        time = milis();
+        UART1_SendData8(64);
+      }
     }
-  }
 }
 
 /*-------------------------------  Assert -----------------------------------*/
