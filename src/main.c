@@ -4,10 +4,7 @@
 #include <stdio.h>
 #include "main.h"
 #include "milis.h"
-#include "delay.h"
 #include "uart1.h"
-
-
 
 
 //inicializace
@@ -22,9 +19,8 @@ void init(void)
   0x00,             //(slave) adresa I2C, hodnota mě nezajímá, protože mám mikrokontrolér jako MASTER
   I2C_DUTYCYCLE_2,  //trvání LOW a HIGH (tady to je 1:1, 16:9 je ještě možné vybrat)
   I2C_ACK_CURR,     //povolení signálu, když příjmu data, mikrokontrolér odešle ACK
-  I2C_ADDMODE_7BIT, //pro RTC mi stačí 7bit adresa 0x68, možnost ještě 10bit
-  16000000);        //taktování procesoru =>cmám na 16Mhz
-  I2C_Cmd(ENABLE);  //povolím I2C
+  I2C_ADDMODE_7BIT, //pro RTC mi stačí 7bit adresa (0x68), možnost ještě 10bit
+  16000000);        //taktování procesoru => mám na 16Mhz
 
   //UART
   UART1_DeInit();
@@ -37,25 +33,18 @@ void init(void)
        );
 
   enableInterrupts();                         //globálně povolím přerušení
-  UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);   //povolení přetečení u RX
-  UART1_Cmd(ENABLE);                          //povolím uart
+  UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);   //povolí přerušení při příjmu znaku
+                                              //RXNE(Receive Data Register Not Empty) přijatý byte dat je připraven k přetečení
+                                              //OR(OverRUn) signalizuje přetečení při přijímání dat
 }
 
-/* void cteni_i2c(void)
-{
-  int32_t info;
-  I2C_GenerateSTART(ENABLE); //začátek komunikace
-
-  I2C_GenerateSTOP(ENABLE);  //konec komunikace
-
-} */
-
-/* void zapis_i2c(void)
-{
-  I2C_GenerateSTART(ENABLE); //začátek komunikace
-  
-  I2C_GenerateSTOP(ENABLE);  //konec komunikace
-} */
+//pro funkci printf musím nadeklarovat funkci putchar
+int putchar(int c) {
+    while (UART1_GetFlagStatus(UART1_FLAG_TXE) == RESET) //čeká dokud není prázdný k přijetí nových dat
+        ;
+    UART1_SendData8(c);                                  //pošlu data
+    return (c);                                          //vracím data
+}
 
 void main(void)
 {
@@ -64,10 +53,10 @@ void main(void)
     init();
 
     while (1) {
-      if(milis() - time > 1000)
+      if(milis() - time > 5000)
       {
         time = milis();
-        UART1_SendData8(64);
+        printf("Ahoj");
       }
     }
 }
