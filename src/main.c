@@ -7,17 +7,39 @@
 //#include "uart1.h"
 
 //PD4 protoze na tomhle pinu je nastaven vystup casovace TIM2 pro OC1 (outputchannel1)
-#define BUZZER_PIN GPIO_PIN_4
 #define BUZZER_PORT GPIOD
+#define BUZZER_PIN GPIO_PIN_4
+//(I2C) PB4 pro SCL a PB5 pro DATA, urceno strukturou stm8s(mohu zmenit)
+#define SCL_PORT GPIOB
+#define SCL_PIN GPIO_PIN_4
+#define SDA_PORT GPIOB
+#define SDA_PIN GPIO_PIN_5
+//NCODER (urcil jsem si sam, neni prikazan, kde by musel byt)
+#define CLK_PORT GPIOF
+#define CLK_PIN GPIO_PIN_4
+#define DT_PORT GPIOF
+#define DT_PIN GPIO_PIN_5
+#define SW_PORT GPIOF
+#define SW_PIN GPIO_PIN_6
 
 //inicializace
 void init(void)
 {
+  //BUZZER
   GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
+
+  //NCODER
+  GPIO_Init(CLK_PORT, CLK_PIN, GPIO_MODE_OUT_);
+  GPIO_Init(DT_PORT, DT_PIN, GPIO_MODE_OUT_);
+  GPIO_Init(SW_PORT, SW_PIN, GPIO_MODE_OUT_);
+
   CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
   init_milis();
 
   //I2C
+  GPIO_Init(SCL_PORT, SCL_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
+  GPIO_Init(SDA_PORT, SDA_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
+
   I2C_DeInit();
   I2C_Init(100000,  //frekvence výstupní pro komunikaci I2C
   0x00,             //(slave) adresa I2C, hodnota mě nezajímá, protože mám mikrokontrolér jako MASTER
