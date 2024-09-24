@@ -50,7 +50,7 @@ void init(void)
         1000,                      // nastavuju šířku impulzu
         TIM2_OCPOLARITY_HIGH);   // nastavení polarity
   TIM2_OC1PreloadConfig(ENABLE);
-  TIM2_Cmd(ENABLE);                                   //spustí TIM2
+  //TIM2_Cmd(ENABLE);                                   //spustí TIM2
   TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);              //povolí přerušení od TIM2
 }
 
@@ -64,15 +64,28 @@ int putchar(int c) {
 
 void main(void)
 {
+    bool buzzer = true;
     uint32_t time = 0;
     init();
 
     while(1)
     {
-       if (milis() - time > 1000) {
-            time = milis();
-            UART1_SendData8('A');
-            //printf("Hola hola\r\n");
+       if (milis() - time > 500)
+        {
+            if(buzzer)
+            {
+                time = milis();
+                TIM2_Cmd(ENABLE);
+                printf("zapinam\r\n");
+                buzzer = false;
+            }
+            else
+            {
+                time = milis();
+                TIM2_Cmd(DISABLE);
+                printf("vypinam\r\n");
+                buzzer = true;
+            }
         }
     }
 }
