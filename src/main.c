@@ -33,8 +33,7 @@ void init(void)
     UART1_STOPBITS_1,                 //stopbit (pauza pro konec přenosu)
      UART1_PARITY_NO,                 //parita (kontrola chyb)
       UART1_SYNCMODE_CLOCK_DISABLE,   //asynchronní (nepoužívám clock, jednodušší a častější, používám baudrate pro komunikaci (tx a rx kanály))
-       UART1_MODE_TXRX_ENABLE         //přijímám a odesílám
-       );
+       UART1_MODE_TXRX_ENABLE);        //přijímám a odesílám
 
   enableInterrupts();                         //globálně povolím přerušení
   UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);   //povolí přerušení při příjmu znaku

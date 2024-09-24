@@ -274,6 +274,7 @@ INTERRUPT_HANDLER(TIM1_CAP_COM_IRQHandler, 12)
   /* In order to detect unexpected events during development,
      it is recommended to set a breakpoint on the following instruction.
   */
+ TIM2_ClearFlag(TIM2_FLAG_UPDATE); //vymažu vlajku přerušení (jinak bych se zacyklil v rutině přerušení!!!)
 }
 
 /**
