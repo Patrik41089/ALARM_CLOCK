@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include "main.h"
 #include "milis.h"
-//#include "uart1.h"
 
 //PD4 protoze na tomhle pinu je nastaven vystup casovace TIM2 pro OC1 (outputchannel1)
 #define BUZZER_PORT GPIOD
@@ -15,12 +14,30 @@
 #define SDA_PORT GPIOB
 #define SDA_PIN GPIO_PIN_5
 //NCODER (urcil jsem si sam, neni prikazan, kde by musel byt)
-#define CLK_PORT GPIOF
-#define CLK_PIN GPIO_PIN_4
-#define DT_PORT GPIOF
-#define DT_PIN GPIO_PIN_5
-#define SW_PORT GPIOF
-#define SW_PIN GPIO_PIN_6
+#define NCLK_PORT GPIOF
+#define NCLK_PIN GPIO_PIN_4
+#define NDT_PORT GPIOF
+#define NDT_PIN GPIO_PIN_5
+#define SW_PORT GPIOE
+#define SW_PIN GPIO_PIN_3
+
+volatile bool tlacitko_SW = false;
+
+//pokud tlacitko bylo stisknuto nastavim na true
+void preruseni_enkoderem(void)
+{
+    if (GPIO_ReadInputPin(SW_PORT, SW_PIN) == RESET)
+    {
+        tlacitko_SW = true;
+    }
+    //NEJAK SMAZAT VLAJKU!
+}
+
+//nastavim preruseni na port E kde mam tlacitko enkoderu
+void E(void)
+{
+    EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOE, EXTI_SENSITIVITY_FALL_ONLY);
+}
 
 //inicializace
 void init(void)
@@ -29,10 +46,10 @@ void init(void)
   GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
 
   //NCODER
-  GPIO_Init(CLK_PORT, CLK_PIN, GPIO_MODE_OUT_);
-  GPIO_Init(DT_PORT, DT_PIN, GPIO_MODE_OUT_);
-  GPIO_Init(SW_PORT, SW_PIN, GPIO_MODE_OUT_);
-
+  GPIO_Init(NCLK_PORT, NCLK_PIN, GPIO_MODE_IN_FL_NO_IT);
+  GPIO_Init(NDT_PORT, NDT_PIN, GPIO_MODE_IN_FL_NO_IT);        //float prototoze neurcita zmena stavu se hodi pro enkoder vzhledem k stavu kdy se s nim nic nedeje
+  GPIO_Init(SW_PORT, SW_PIN, GPIO_MODE_IN_PU_IT);           //pull-up rezistor protoze SW budu pouzivat jako tlacitko co dela preruseni
+  //taktování procesoru na 16MHz
   CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
   init_milis();
 
@@ -84,11 +101,15 @@ int putchar(int c) {
     return (c);                                          //vracím data
 }
 
+
 void main(void)
 {
     bool buzzer = true;
     uint32_t time = 0;
+
+
     init();
+    E();
 
     while(1)
     {
@@ -109,8 +130,19 @@ void main(void)
                 buzzer = true;
             }
         }
+
+/*         if(milis() - time > 50)
+        {
+            time = milis();
+            if(tlacitko_SW == true)
+                {
+                    printf("LOL\r\n");
+                    tlacitko_SW = false;
+                }
+
+        } */
+
     }
 }
-
 /*-------------------------------  Assert -----------------------------------*/
 #include "__assert__.h"
