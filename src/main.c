@@ -106,7 +106,7 @@ void main(void)
 {
     bool buzzer = true;
     uint32_t time = 0;
-
+    uint32_t time1 = 0;
 
     init();
     E();
@@ -131,16 +131,16 @@ void main(void)
             }
         }
 
-/*         if(milis() - time > 50)
+        if(milis() - time1 > 50)
         {
-            time = milis();
+            time1 = milis();
             if(tlacitko_SW == true)
                 {
                     printf("LOL\r\n");
                     tlacitko_SW = false;
                 }
 
-        } */
+        }
 
     }
 }
