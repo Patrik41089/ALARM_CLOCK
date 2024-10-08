@@ -21,6 +21,8 @@
 #define NDT_PIN GPIO_PIN_5
 #define SW_PORT GPIOE
 #define SW_PIN GPIO_PIN_3
+//adresa RTC po snazší zápis
+#define RTC 0x68 //(0b1001000<<1) na sběrnici se posílá 8bit i když jsou adresy uvedeny pro 7bit proto se zrarovnávájí doleva
 
 volatile bool tlacitko_SW = false; //volatile protoze externi preruseni (zvenku)
 
@@ -104,10 +106,6 @@ int putchar(int c) {
     return (c);                                          //vracím data
 }
 
-void I_2_C(void)
-{
- //....
-}
 
 void I2C_START(void) {
     SDA_HIGH;
@@ -170,7 +168,6 @@ void main(void)
             time2 = milis();
             //I_2_C();
             printf("|||||||||||||||\r\n");
-            //printf("Recover: 0x%02X\n", swi2c_recover());
             printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
             I2C_START();
             printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
