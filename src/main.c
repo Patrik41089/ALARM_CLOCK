@@ -106,21 +106,23 @@ int putchar(int c) {
     return (c);                                          //vracím data
 }
 
+//normalne se SDATA mohou menit POUZE kdyz je SCL v LOW
 
+//definice start = přechodem SDA z HIGH na LOW, zatímco SCL zůstává HIGH.
 void I2C_START(void) {
     SDA_HIGH;
     SCL_HIGH;
+    SWI2C_SS_TIME;          
+    SDA_LOW;                //prvni sestupna hrana SDA
     SWI2C_SS_TIME;      
-    SDA_LOW;            
-    SWI2C_SS_TIME;      
-    SCL_LOW;            
+    SCL_LOW;                //nasleduje sestupna hrana SCL (pote je v LOW a SDA se dale muze menit)
 }
-
+//definice stop = přechodem SDA z LOW na HIGH, zatímco SCL je HIGH.
 void I2C_STOP(void) {
     SDA_LOW;
     SCL_HIGH;
-    SWI2C_SS_TIME;      
-    SDA_HIGH;           
+    SWI2C_SS_TIME;      //nutne pauzy pro stabilitu!!! 5µs (definovano v swi2c.h)
+    SDA_HIGH;           //vzestupna hrana SDA, kdyz je SCL HIGH => coz je
     SWI2C_SS_TIME;      
 }
 
