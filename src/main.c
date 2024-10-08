@@ -132,6 +132,7 @@ void main(void)
     uint32_t time = 0;
     uint32_t time1 = 0;
     uint32_t time2 = 0;
+    uint32_t time3 = 0;
 
     init(); //init vseho co jsem inicializoval
 
@@ -154,7 +155,7 @@ void main(void)
                 buzzer = true;
             }
         }
- */
+        */
         if(milis() - time1 > 50)
         {
             time1 = milis();            //MUSIM POUZIT JINOU PROMENNOU CASU !!!
@@ -168,7 +169,6 @@ void main(void)
         if(milis() - time2 > 1000 )
         {
             time2 = milis();
-            //I_2_C();
             printf("|||||||||||||||\r\n");
             printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
             I2C_START();
@@ -176,6 +176,10 @@ void main(void)
             I2C_STOP();
             printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
             printf("|||||||||||||||\r\n");
+        }
+        if(milis() - time3 > 1)
+        {
+            time3 = milis();
         }
     }
 }
