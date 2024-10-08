@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include "main.h"
 #include "milis.h"
+#include "swi2c.h"
 
 //PD4 protoze na tomhle pinu je nastaven vystup casovace TIM2 pro OC1 (outputchannel1)
 #define BUZZER_PORT GPIOD
 #define BUZZER_PIN GPIO_PIN_4
-//(I2C) PB4 pro SCL a PB5 pro DATA, urceno strukturou stm8s(mohu zmenit)
+//(I2C) PB4 pro SCL a PB5 pro DATA, urceno strukturou stm8s
 #define SCL_PORT GPIOB
 #define SCL_PIN GPIO_PIN_4
 #define SDA_PORT GPIOB
@@ -21,7 +22,7 @@
 #define SW_PORT GPIOE
 #define SW_PIN GPIO_PIN_3
 
-volatile bool tlacitko_SW = false;
+volatile bool tlacitko_SW = false; //volatile protoze externi preruseni (zvenku)
 
 //pokud tlacitko bylo stisknuto nastavim na true
 void preruseni_enkoderem(void)
@@ -30,13 +31,11 @@ void preruseni_enkoderem(void)
     {
         tlacitko_SW = true;
     }
-    //NEJAK SMAZAT VLAJKU!
 }
 
-//nastavim preruseni na port E kde mam tlacitko enkoderu
-void E(void)
+void otaceni_enkoderem(void)
 {
-    EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOE, EXTI_SENSITIVITY_FALL_ONLY);
+    //...
 }
 
 //inicializace
@@ -49,9 +48,12 @@ void init(void)
   GPIO_Init(NCLK_PORT, NCLK_PIN, GPIO_MODE_IN_FL_NO_IT);
   GPIO_Init(NDT_PORT, NDT_PIN, GPIO_MODE_IN_FL_NO_IT);        //float prototoze neurcita zmena stavu se hodi pro enkoder vzhledem k stavu kdy se s nim nic nedeje
   GPIO_Init(SW_PORT, SW_PIN, GPIO_MODE_IN_PU_IT);           //pull-up rezistor protoze SW budu pouzivat jako tlacitko co dela preruseni
+                                                        //IT PROTOZE JINAK BY BYLO PRERUSENI ZAKAZANE = NEFUNGOVALO BY
   //taktování procesoru na 16MHz
   CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
   init_milis();
+
+  //swi2c_init(); //odkomentuji kod prestane fungovat - chyba pry neni definovano (swi2.h a swi2.c se zdaji byt v poradku)
 
   //I2C
   GPIO_Init(SCL_PORT, SCL_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
@@ -64,7 +66,7 @@ void init(void)
   I2C_ACK_CURR,     //povolení signálu, když příjmu data, mikrokontrolér odešle ACK
   I2C_ADDMODE_7BIT, //pro RTC mi stačí 7bit adresa (0x68), možnost ještě 10bit
   16000000);        //taktování procesoru => mám na 16Mhz
-
+ 
   //UART
   UART1_DeInit();
   UART1_Init(9600,                    //baudrate = komunikační rychlost
@@ -91,6 +93,7 @@ void init(void)
   TIM2_OC1PreloadConfig(ENABLE);
   //TIM2_Cmd(ENABLE);                                   //spustí TIM2
   TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);              //povolí přerušení od TIM2
+
 }
 
 //pro funkci printf musím nadeklarovat funkci putchar
@@ -101,19 +104,40 @@ int putchar(int c) {
     return (c);                                          //vracím data
 }
 
+void I_2_C(void)
+{
+ //....
+}
+
+void I2C_START(void) {
+    SDA_HIGH;
+    SCL_HIGH;
+    SWI2C_SS_TIME;      
+    SDA_LOW;            
+    SWI2C_SS_TIME;      
+    SCL_LOW;            
+}
+
+void I2C_STOP(void) {
+    SDA_LOW;
+    SCL_HIGH;
+    SWI2C_SS_TIME;      
+    SDA_HIGH;           
+    SWI2C_SS_TIME;      
+}
 
 void main(void)
 {
-    bool buzzer = true;
+    //bool buzzer = true;
     uint32_t time = 0;
     uint32_t time1 = 0;
+    uint32_t time2 = 0;
 
-    init();
-    E();
+    init(); //init vseho co jsem inicializoval
 
     while(1)
     {
-       if (milis() - time > 500)
+        /* if (milis() - time > 500)
         {
             if(buzzer)
             {
@@ -130,18 +154,30 @@ void main(void)
                 buzzer = true;
             }
         }
-
+ */
         if(milis() - time1 > 50)
         {
-            time1 = milis();
+            time1 = milis();            //MUSIM POUZIT JINOU PROMENNOU CASU !!!
             if(tlacitko_SW == true)
                 {
-                    printf("LOL\r\n");
+                    printf("KLIK\r\n");
                     tlacitko_SW = false;
                 }
 
         }
-
+        if(milis() - time2 > 1000 )
+        {
+            time2 = milis();
+            //I_2_C();
+            printf("|||||||||||||||\r\n");
+            //printf("Recover: 0x%02X\n", swi2c_recover());
+            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
+            I2C_START();
+            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
+            I2C_STOP();
+            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
+            printf("|||||||||||||||\r\n");
+        }
     }
 }
 /*-------------------------------  Assert -----------------------------------*/
