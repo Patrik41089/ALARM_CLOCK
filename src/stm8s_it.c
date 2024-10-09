@@ -355,7 +355,6 @@ INTERRUPT_HANDLER(I2C_IRQHandler, 19)
   /* In order to detect unexpected events during development,
      it is recommended to set a breakpoint on the following instruction.
   */
- I2C_ClearFlag(I2C_FLAG_ACKNOWLEDGEFAILURE); //vymazu vlajku preruseni abych se tady nezasekl
 }
 
 #if defined(STM8S105) || defined(STM8S005) ||  defined (STM8AF626x)

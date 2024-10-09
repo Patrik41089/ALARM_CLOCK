@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "main.h"
 #include "milis.h"
+#include "stm8_hd44780.h"
 #include "swi2c.h"
 
 //PD4 protoze na tomhle pinu je nastaven vystup casovace TIM2 pro OC1 (outputchannel1)
@@ -21,8 +22,6 @@
 #define NDT_PIN GPIO_PIN_5
 #define SW_PORT GPIOE
 #define SW_PIN GPIO_PIN_3
-//adresa RTC po snazší zápis
-#define RTC 0x68 //(0b1001000<<1) na sběrnici se posílá 8bit i když jsou adresy uvedeny pro 7bit proto se zrarovnávájí doleva
 
 volatile bool tlacitko_SW = false; //volatile protoze externi preruseni (zvenku)
 
@@ -35,14 +34,17 @@ void preruseni_enkoderem(void)
     }
 }
 
-void otaceni_enkoderem(void)
+/* void otaceni_enkoderem(void)
 {
     //...
-}
+} */
 
 //inicializace
 void init(void)
 {
+  //taktování procesoru na 16MHz
+  CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+
   //BUZZER
   GPIO_Init(BUZZER_PORT, BUZZER_PIN, GPIO_MODE_OUT_PP_LOW_FAST);
 
@@ -51,24 +53,13 @@ void init(void)
   GPIO_Init(NDT_PORT, NDT_PIN, GPIO_MODE_IN_FL_NO_IT);        //float prototoze neurcita zmena stavu se hodi pro enkoder vzhledem k stavu kdy se s nim nic nedeje
   GPIO_Init(SW_PORT, SW_PIN, GPIO_MODE_IN_PU_IT);           //pull-up rezistor protoze SW budu pouzivat jako tlacitko co dela preruseni
                                                         //IT PROTOZE JINAK BY BYLO PRERUSENI ZAKAZANE = NEFUNGOVALO BY
-  //taktování procesoru na 16MHz
-  CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+
+  //milis
   init_milis();
 
-  //swi2c_init(); //odkomentuji kod prestane fungovat - chyba pry neni definovano (swi2.h a swi2.c se zdaji byt v poradku)
-
   //I2C
-  GPIO_Init(SCL_PORT, SCL_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
-  GPIO_Init(SDA_PORT, SDA_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
+  swi2c_init();
 
-  I2C_DeInit();
-  I2C_Init(100000,  //frekvence výstupní pro komunikaci I2C
-  0x00,             //(slave) adresa I2C, hodnota mě nezajímá, protože mám mikrokontrolér jako MASTER
-  I2C_DUTYCYCLE_2,  //trvání LOW a HIGH (tady to je 1:1, 16:9 je ještě možné vybrat)
-  I2C_ACK_CURR,     //povolení signálu, když příjmu data, mikrokontrolér odešle ACK
-  I2C_ADDMODE_7BIT, //pro RTC mi stačí 7bit adresa (0x68), možnost ještě 10bit
-  16000000);        //taktování procesoru => mám na 16Mhz
- 
   //UART
   UART1_DeInit();
   UART1_Init(9600,                    //baudrate = komunikační rychlost
@@ -86,14 +77,13 @@ void init(void)
 
   //TIM2
   TIM2_DeInit();
-  TIM2_TimeBaseInit(TIM2_PRESCALER_1, 15999);   //16:1 = 16MHz : 16000 = 1kHz
+  TIM2_TimeBaseInit(TIM2_PRESCALER_1, 63999);   //16:1 = 16MHz : 16000 = 1kHz
   TIM2_OC1Init(                // konfigurace output channel1
         TIM2_OCMODE_PWM1,        // mod PWM1
         TIM2_OUTPUTSTATE_ENABLE, // povolím
         1000,                      // nastavuju šířku impulzu
         TIM2_OCPOLARITY_HIGH);   // nastavení polarity
-  TIM2_OC1PreloadConfig(ENABLE);
-  //TIM2_Cmd(ENABLE);                                   //spustí TIM2
+  TIM2_OC1PreloadConfig(ENABLE);                                 //spustí TIM2
   TIM2_ITConfig(TIM2_IT_UPDATE, ENABLE);              //povolí přerušení od TIM2
 
 }
@@ -106,82 +96,163 @@ int putchar(int c) {
     return (c);                                          //vracím data
 }
 
-//normalne se SDATA mohou menit POUZE kdyz je SCL v LOW
+//I2C test
+void test_I2C(void)
+{
+    if(swi2c_recover() == 0)
+    {
+        printf("neselhal recover\n\r");
+        if(swi2c_test_slave(0x68<<1) == 0)
+        {
+            printf("neselhal test slave\n\r");
+            printf("%02X\n\r", 0x68);
+        }
+        else
+        {
+            printf("selhal test slave\n\r");
+        }
+    }        
+    else
+    {
+        printf("selhal recover\n\r");
+    }  
+}
 
-//definice start = přechodem SDA z HIGH na LOW, zatímco SCL zůstává HIGH.
-void I2C_START(void) {
-    SDA_HIGH;
-    SCL_HIGH;
-    SWI2C_SS_TIME;          
-    SDA_LOW;                //prvni sestupna hrana SDA
-    SWI2C_SS_TIME;      
-    SCL_LOW;                //nasleduje sestupna hrana SCL (pote je v LOW a SDA se dale muze menit)
-}
-//definice stop = přechodem SDA z LOW na HIGH, zatímco SCL je HIGH.
-void I2C_STOP(void) {
-    SDA_LOW;
-    SCL_HIGH;
-    SWI2C_SS_TIME;      //nutne pauzy pro stabilitu!!! 5µs (definovano v swi2c.h)
-    SDA_HIGH;           //vzestupna hrana SDA, kdyz je SCL HIGH => coz je
-    SWI2C_SS_TIME;      
-}
 
 void main(void)
 {
-    //bool buzzer = true;
+    bool alarm = false;
+    bool prepnuti = true;
+
     uint32_t time = 0;
     uint32_t time1 = 0;
     uint32_t time2 = 0;
     uint32_t time3 = 0;
 
+    uint8_t DATA_DO_RTC[7]= {0,0,0,0,0,0,0};
+    uint8_t DATA_Z_RTC[7] = {0,0,0,0,0,0,0};
+
+    uint8_t DATA_Z_ALARM1[4] = {0,0,0,0};
+    uint8_t DATA_Z_ALARM2[3] = {0,0,0};
+
+    uint8_t DATA_DO_ALARM1[4] ={0,0,0,0};
+    uint8_t DATA_DO_ALARM2[3] ={0,0,0,};
+
+
+    uint8_t status_ALARMU = 0;
+
+    //RTC v BCD davam HEXA pak nezapomenout prevest
+    DATA_DO_RTC[0] = 0x00;  //sekundy
+    DATA_DO_RTC[1] = 0x00;  //minuty
+    DATA_DO_RTC[2] = 0x00;  //hodiny
+    DATA_DO_RTC[4] = 0x00;  //dny
+    DATA_DO_RTC[5] = 0x10;  //měsíce
+    DATA_DO_RTC[6] = 0x24;  //roky
+
+    //ALARM1
+    DATA_DO_ALARM1[0] = 0x00;
+    DATA_DO_ALARM1[1] = 0x00;
+    DATA_DO_ALARM1[2] = 0x00;
+    DATA_DO_ALARM1[3] = 0x00;
+
+    //ALARM2
+    DATA_DO_ALARM2[0] = 0x00;
+    DATA_DO_ALARM2[1] = 0x00;
+    DATA_DO_ALARM2[2] = 0x00;
+
     init(); //init vseho co jsem inicializoval
+    test_I2C();
 
     while(1)
     {
-        /* if (milis() - time > 500)
+        if (milis() - time > 500)
         {
-            if(buzzer)
+            if(alarm)
             {
-                time = milis();
-                TIM2_Cmd(ENABLE);
-                printf("zapinam\r\n");
-                buzzer = false;
-            }
-            else
-            {
-                time = milis();
-                TIM2_Cmd(DISABLE);
-                printf("vypinam\r\n");
-                buzzer = true;
+                if(milis() - time > 500 && prepnuti)
+                {
+                    time = milis();
+                    TIM2_Cmd(ENABLE);
+                    prepnuti = false;
+                }
+                else
+                {
+                    time = milis();
+                    TIM2_Cmd(DISABLE);
+                    prepnuti = true;
+
+                }
+                if(tlacitko_SW == true)
+                {
+                    TIM2_Cmd(DISABLE);
+                    alarm = false;
+                    tlacitko_SW = false;
+                }
             }
         }
-        */
-        if(milis() - time1 > 50)
+           //ZAPISUJI ALARM A CAS
+ /*        if(milis() - time1 > 50)
         {
             time1 = milis();            //MUSIM POUZIT JINOU PROMENNOU CASU !!!
             if(tlacitko_SW == true)
                 {
-                    printf("KLIK\r\n");
+                    printf("zapisu do RTC %d\n",  swi2c_write_buf(0x68 << 1, 0x00, DATA_DO_RTC, 7));
+                    printf("zapisu do ALARM1 %d\n", swi2c_write_buf(0x68 << 1, ?, DATA_DO_ALARM1, 4));
+                    printf("zapisu do ALARM2 %d\n", swi2c_write_buf(0x68 << 1, ?, DATA_DO_ALARM2, 3));
                     tlacitko_SW = false;
-                }
-
-        }
-        if(milis() - time2 > 1000 )
+                } */
+        //ALARMY + STATUS ALARMU do UART
+        if(milis() - time2 > 6666 )
         {
             time2 = milis();
-            printf("|||||||||||||||\r\n");
-            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
-            I2C_START();
-            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
-            I2C_STOP();
-            printf("SCL: %d, SDA: %d\n\r", SCL_stat(), SDA_stat());
-            printf("|||||||||||||||\r\n");
+            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_ALARM1, 4); //posouvam adresu, od jake adresy, jaka data, a kolik dat (kolik adres zaplni)
+            printf("Alarm1: %d%d:%d%d:%d%d dat: %d%d\n\r",
+                    DATA_Z_ALARM1[2] >> 4, DATA_Z_ALARM1[2] & 0x0F,
+                    DATA_Z_ALARM1[1] >> 4, DATA_Z_ALARM1[1] & 0x0F, 
+                    DATA_Z_ALARM1[0] >> 4, DATA_Z_ALARM1[0] & 0x0F, 
+                    DATA_Z_ALARM1[3] >> 4, DATA_Z_ALARM1[3] & 0x0F);
+
+            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_ALARM2, 3);
+            printf("Alarm2: %d%d:%d%d dat: %d%d\n",
+                    DATA_Z_ALARM2[1] >> 4, DATA_Z_ALARM2[1] & 0x0F, 
+                    DATA_Z_ALARM2[0] >> 4, DATA_Z_ALARM2[0] & 0x0F, 
+                    DATA_Z_ALARM2[2] >> 4, DATA_Z_ALARM2[2] & 0x0F);
+
+            swi2c_read_buf(0x68 << 1, 0x0F, &status_ALARMU, 1);
+            if (status_ALARMU & 0x01) //nejnizsi bit
+            {
+                printf("Alarm1 on\n\r");
+                alarm = true;
+            }
+            else
+            {
+                printf("Alarm1 off\n\r");
+            }
+            if (status_ALARMU & 0x02) //druhy nejnizsi bit
+            {
+                printf("Alarm2 on\n\r");
+                alarm = true;
+            }
+            else
+            {
+                printf("Alarm2 off\n\r");
+            }
         }
-        if(milis() - time3 > 1)
+        //CAS do UART
+        if(milis() - time3 > 10000)
         {
             time3 = milis();
+            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_RTC, 7);
+/*             printf("dat: %d%d.%d%d.\n\r rok: 20%d%d \n\r cas: %d%d:%d%d:%d%d \n\r",
+                   DATA_Z_RTC[4] >> 4, DATA_Z_RTC[4] & 0x0F,
+                   DATA_Z_RTC[5] >> 4, DATA_Z_RTC[5] & 0x0F,
+                   DATA_Z_RTC[6] >> 4, DATA_Z_RTC[6] & 0x0F,
+                   DATA_Z_RTC[2] >> 4, DATA_Z_RTC[2] & 0x0F,
+                   DATA_Z_RTC[1] >> 4, DATA_Z_RTC[1] & 0x0F,
+                   DATA_Z_RTC[0] >> 4, DATA_Z_RTC[0] & 0x0F); */
         }
     }
 }
+
 /*-------------------------------  Assert -----------------------------------*/
 #include "__assert__.h"
