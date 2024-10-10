@@ -124,10 +124,12 @@ void main(void)
     bool alarm = false;
     bool prepnuti = true;
 
-    uint32_t time = 0;
+    uint32_t time  = 0;
     uint32_t time1 = 0;
     uint32_t time2 = 0;
     uint32_t time3 = 0;
+    uint32_t time4 = 0;
+    uint32_t time5 = 0;
 
     uint8_t DATA_DO_RTC[7]= {0,0,0,0,0,0,0};
     uint8_t DATA_Z_RTC[7] = {0,0,0,0,0,0,0};
@@ -140,25 +142,27 @@ void main(void)
 
 
     uint8_t status_ALARMU = 0;
+    uint8_t reset_status = status_ALARMU & 0xFC; //resetuje oba alarmy (A1F a A2F)
 
     //RTC v BCD davam HEXA pak nezapomenout prevest
     DATA_DO_RTC[0] = 0x00;  //sekundy
-    DATA_DO_RTC[1] = 0x00;  //minuty
-    DATA_DO_RTC[2] = 0x00;  //hodiny
-    DATA_DO_RTC[4] = 0x00;  //dny
+    DATA_DO_RTC[1] = 0x20;  //minuty
+    DATA_DO_RTC[2] = 0x20;  //hodiny
+    DATA_DO_RTC[3] = 0x00;
+    DATA_DO_RTC[4] = 0x20;  //dny
     DATA_DO_RTC[5] = 0x10;  //měsíce
     DATA_DO_RTC[6] = 0x24;  //roky
 
     //ALARM1
-    DATA_DO_ALARM1[0] = 0x00;
-    DATA_DO_ALARM1[1] = 0x00;
-    DATA_DO_ALARM1[2] = 0x00;
-    DATA_DO_ALARM1[3] = 0x00;
+    DATA_DO_ALARM1[0] = 0x5;   //sekundy
+    DATA_DO_ALARM1[1] = 0x20;   //minuty
+    DATA_DO_ALARM1[2] = 0x20;   //hodiny
+    DATA_DO_ALARM1[3] = 0x20;   //den/datum
 
     //ALARM2
-    DATA_DO_ALARM2[0] = 0x00;
-    DATA_DO_ALARM2[1] = 0x00;
-    DATA_DO_ALARM2[2] = 0x00;
+    DATA_DO_ALARM2[0] = 0x5;   //sekundy
+    DATA_DO_ALARM2[1] = 0x20;   //minuty
+    DATA_DO_ALARM2[2] = 0x20;   //hodiny
 
     init(); //init vseho co jsem inicializoval
     test_I2C();
@@ -186,38 +190,54 @@ void main(void)
                 {
                     TIM2_Cmd(DISABLE);
                     alarm = false;
+                    swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1);
                     tlacitko_SW = false;
                 }
             }
         }
-           //ZAPISUJI ALARM A CAS
- /*        if(milis() - time1 > 50)
+        //ZAPISUJI ALARM A CAS
+        if(milis() - time1 > 10000)
         {
             time1 = milis();            //MUSIM POUZIT JINOU PROMENNOU CASU !!!
-            if(tlacitko_SW == true)
-                {
-                    printf("zapisu do RTC %d\n",  swi2c_write_buf(0x68 << 1, 0x00, DATA_DO_RTC, 7));
-                    printf("zapisu do ALARM1 %d\n", swi2c_write_buf(0x68 << 1, ?, DATA_DO_ALARM1, 4));
-                    printf("zapisu do ALARM2 %d\n", swi2c_write_buf(0x68 << 1, ?, DATA_DO_ALARM2, 3));
-                    tlacitko_SW = false;
-                } */
+              
+            printf("zapisu do RTC %d\n\r",  swi2c_write_buf(0x68 << 1, 0x00, DATA_DO_RTC, 7));
+            printf("zapisu do ALARM1 %d\n\r", swi2c_write_buf(0x68 << 1, 0x07, DATA_DO_ALARM1, 4));
+            printf("zapisu do ALARM2 %d\n\r", swi2c_write_buf(0x68 << 1, 0x0B, DATA_DO_ALARM2, 3));
+        }
+        
         //ALARMY + STATUS ALARMU do UART
-        if(milis() - time2 > 6666 )
+        if(milis() - time2 > 2000 )
         {
             time2 = milis();
-            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_ALARM1, 4); //posouvam adresu, od jake adresy, jaka data, a kolik dat (kolik adres zaplni)
-            printf("Alarm1: %d%d:%d%d:%d%d dat: %d%d\n\r",
-                    DATA_Z_ALARM1[2] >> 4, DATA_Z_ALARM1[2] & 0x0F,
+             swi2c_read_buf(0x68 << 1, 0x07, DATA_Z_ALARM1, 4); //posouvam adresu, od jake adresy, jaka data, a kolik dat (kolik adres zaplni)
+            printf("Alarm1:%d%d:%d%d:%d%d \n\r",
+                    //DATA_Z_ALARM1[3] >> 4, DATA_Z_ALARM1[3] & 0x0F,
+                    DATA_Z_ALARM1[2] >> 4, DATA_Z_ALARM1[2] & 0x0F, 
                     DATA_Z_ALARM1[1] >> 4, DATA_Z_ALARM1[1] & 0x0F, 
-                    DATA_Z_ALARM1[0] >> 4, DATA_Z_ALARM1[0] & 0x0F, 
-                    DATA_Z_ALARM1[3] >> 4, DATA_Z_ALARM1[3] & 0x0F);
+                    DATA_Z_ALARM1[0] >> 4, DATA_Z_ALARM1[0] & 0x0F);
 
-            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_ALARM2, 3);
-            printf("Alarm2: %d%d:%d%d dat: %d%d\n",
+            swi2c_read_buf(0x68 << 1, 0x0B, DATA_Z_ALARM2, 3);
+            printf("Alarm2: %d%d:%d%d:%d%d \n\r",
+                    DATA_Z_ALARM2[2] >> 4, DATA_Z_ALARM2[2] & 0x0F, 
                     DATA_Z_ALARM2[1] >> 4, DATA_Z_ALARM2[1] & 0x0F, 
-                    DATA_Z_ALARM2[0] >> 4, DATA_Z_ALARM2[0] & 0x0F, 
-                    DATA_Z_ALARM2[2] >> 4, DATA_Z_ALARM2[2] & 0x0F);
-
+                    DATA_Z_ALARM2[0] >> 4, DATA_Z_ALARM2[0] & 0x0F);
+        }
+        //CAS do UART
+        if(milis() - time3 > 2000)
+        {
+            time3 = milis();
+            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_RTC, 7);
+            printf("dat: %d%d.%d%d.\n\r rok: 20%d%d \n\r cas: %d%d:%d%d:%d%d \n\r",
+                DATA_Z_RTC[4] >> 4, DATA_Z_RTC[4] & 0x0F,
+                DATA_Z_RTC[5] >> 4, DATA_Z_RTC[5] & 0x0F,
+                DATA_Z_RTC[6] >> 4, DATA_Z_RTC[6] & 0x0F,
+                DATA_Z_RTC[2] >> 4, DATA_Z_RTC[2] & 0x0F,
+                DATA_Z_RTC[1] >> 4, DATA_Z_RTC[1] & 0x0F,
+                DATA_Z_RTC[0] >> 4, DATA_Z_RTC[0] & 0x0F);
+        }
+        if (milis() - time4 > 1000)
+        {
+            time4 = milis();
             swi2c_read_buf(0x68 << 1, 0x0F, &status_ALARMU, 1);
             if (status_ALARMU & 0x01) //nejnizsi bit
             {
@@ -238,21 +258,10 @@ void main(void)
                 printf("Alarm2 off\n\r");
             }
         }
-        //CAS do UART
-        if(milis() - time3 > 10000)
-        {
-            time3 = milis();
-            swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_RTC, 7);
-/*             printf("dat: %d%d.%d%d.\n\r rok: 20%d%d \n\r cas: %d%d:%d%d:%d%d \n\r",
-                   DATA_Z_RTC[4] >> 4, DATA_Z_RTC[4] & 0x0F,
-                   DATA_Z_RTC[5] >> 4, DATA_Z_RTC[5] & 0x0F,
-                   DATA_Z_RTC[6] >> 4, DATA_Z_RTC[6] & 0x0F,
-                   DATA_Z_RTC[2] >> 4, DATA_Z_RTC[2] & 0x0F,
-                   DATA_Z_RTC[1] >> 4, DATA_Z_RTC[1] & 0x0F,
-                   DATA_Z_RTC[0] >> 4, DATA_Z_RTC[0] & 0x0F); */
-        }
+        
     }
 }
+
 
 /*-------------------------------  Assert -----------------------------------*/
 #include "__assert__.h"
