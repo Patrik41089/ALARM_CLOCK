@@ -17,9 +17,9 @@
 #define SDA_PIN GPIO_PIN_5
 //NCODER (urcil jsem si sam, neni prikazan, kde by musel byt)
 #define NCLK_PORT GPIOF
-#define NCLK_PIN GPIO_PIN_4
+#define NCLK_PIN GPIO_PIN_5
 #define NDT_PORT GPIOF
-#define NDT_PIN GPIO_PIN_5
+#define NDT_PIN GPIO_PIN_4
 #define SW_PORT GPIOE
 #define SW_PIN GPIO_PIN_3
 
@@ -123,7 +123,11 @@ void main(void)
 {
     bool alarm = false;
     bool prepnuti = true;
-    bool zapsal = false;
+
+    //bool zapsal = false;
+
+    bool tyden = false;
+    bool vikend = false;
 
     uint32_t time  = 0;
     uint32_t time1 = 0;
@@ -131,6 +135,8 @@ void main(void)
     uint32_t time3 = 0;
     uint32_t time4 = 0;
     uint32_t time5 = 0;
+
+    uint8_t den_v_tydnu;
 
     uint8_t DATA_DO_RTC[7]= {0,0,0,0,0,0,0};
     uint8_t DATA_Z_RTC[7] = {0,0,0,0,0,0,0};
@@ -145,25 +151,26 @@ void main(void)
     uint8_t status_ALARMU = 0;
     uint8_t reset_status = status_ALARMU & 0xFC; //resetuje oba alarmy (A1F a A2F)
 
+
     //RTC v BCD davam HEXA pak nezapomenout prevest
-    DATA_DO_RTC[0] = 0x00;  //sekundy
+    DATA_DO_RTC[0] = 0x05;  //sekundy
     DATA_DO_RTC[1] = 0x10;  //minuty
     DATA_DO_RTC[2] = 0x10;  //hodiny
-    //DATA_DO_RTC[3] = 0x01;  //den v tydnu
-    DATA_DO_RTC[4] = 0x00;  //dny
+    DATA_DO_RTC[3] = 0x06;  //den v tydnu   - kdyz (1<<6) nemohu zadat! -> nutna maska!
+    DATA_DO_RTC[4] = 0x05;  //den v mesici  - kdyz 0x00 nemohu zadat!
     DATA_DO_RTC[5] = 0x10;  //měsíce
     DATA_DO_RTC[6] = 0x24;  //roky
 
     //ALARM1
-    DATA_DO_ALARM1[0] = 0x10;   //sekundy
+    DATA_DO_ALARM1[0] = 0x30;   //sekundy
     DATA_DO_ALARM1[1] = 0x10;   //minuty
     DATA_DO_ALARM1[2] = 0x10;   //hodiny
-    DATA_DO_ALARM1[3] = 0x00;   //den/datum kdyz 0 tak kazdy den
+    DATA_DO_ALARM1[3] = 0x80;   //0x80 maska alarmu (ignorace mesice a dnu)
 
     //ALARM2
     DATA_DO_ALARM2[0] = 0x11;   //minuty
     DATA_DO_ALARM2[1] = 0x10;   //hodiny
-    DATA_DO_ALARM2[2] = 0x00;   //den/datum kdyz 0 tak kazdy den
+    DATA_DO_ALARM2[2] = 0x80;   //(1<<6); 0 kazdy den v tydnu
 
     init(); //init vseho co jsem inicializoval
     test_I2C();
@@ -190,17 +197,19 @@ void main(void)
                 if(tlacitko_SW == true)
                 {
                     TIM2_Cmd(DISABLE);
+                    printf("SW\n\r");
                     alarm = false;                                      //funkce pipani vypnout
                     swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1); //reset bity alarmy
                     tlacitko_SW = false;                                //reset tlacitko zmacknuto
                 }
-                if(zapsal)                                              //pokud jsem nahral cas a alarmy tak je resetovat + vypnout tuhle funkci aby nepipalo
+/*                 if(zapsal)                                         
                 {
                     TIM2_Cmd(DISABLE);
+                    printf("ZAPSAL\n\r");
                     alarm = false;                                      
                     swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1); 
                     zapsal = false;
-                }
+                } */
             }
         }
         //ZAPISUJI ALARM A CAS
@@ -211,9 +220,7 @@ void main(void)
             printf("zapisu do RTC %d\n\r",  swi2c_write_buf(0x68 << 1, 0x00, DATA_DO_RTC, 7));
             printf("zapisu do ALARM1 %d\n\r", swi2c_write_buf(0x68 << 1, 0x07, DATA_DO_ALARM1, 4));
             printf("zapisu do ALARM2 %d\n\r", swi2c_write_buf(0x68 << 1, 0x0B, DATA_DO_ALARM2, 3));
-            zapsal = true;
-            //TIM2_Cmd(DISABLE); nepomohlo
-            //swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1); jen resetlo ale furt pipa
+            //zapsal = true;
         }
         
         //ALARMY do UART
@@ -221,15 +228,15 @@ void main(void)
         {
             time2 = milis();
             swi2c_read_buf(0x68 << 1, 0x07, DATA_Z_ALARM1, 4); //posouvam adresu, od jake adresy, jaka data, a kolik dat (kolik adres zaplni)
-            printf("Alarm1: %d%d:%d%d:%d%d \n\r",
-                    //DATA_Z_ALARM1[3] >> 4, DATA_Z_ALARM1[3] & 0x0F,
+            printf("Alarm1: %d%d %d%d:%d%d:%d%d \n\r",
+                    DATA_Z_ALARM1[3] >> 4, DATA_Z_ALARM1[3] & 0x0F,
                     DATA_Z_ALARM1[2] >> 4, DATA_Z_ALARM1[2] & 0x0F, 
                     DATA_Z_ALARM1[1] >> 4, DATA_Z_ALARM1[1] & 0x0F, 
                     DATA_Z_ALARM1[0] >> 4, DATA_Z_ALARM1[0] & 0x0F);
 
             swi2c_read_buf(0x68 << 1, 0x0B, DATA_Z_ALARM2, 3);
-            printf("Alarm2: %d%d:%d%d \n\r",
-                    //DATA_Z_ALARM2[2] >> 4, DATA_Z_ALARM2[2] & 0x0F, 
+            printf("Alarm2: %d%d %d%d:%d%d \n\r",
+                    DATA_Z_ALARM2[2] >> 4, DATA_Z_ALARM2[2] & 0x0F, 
                     DATA_Z_ALARM2[1] >> 4, DATA_Z_ALARM2[1] & 0x0F, 
                     DATA_Z_ALARM2[0] >> 4, DATA_Z_ALARM2[0] & 0x0F);
         }
@@ -238,35 +245,64 @@ void main(void)
         {
             time3 = milis();
             swi2c_read_buf(0x68 << 1, 0x00, DATA_Z_RTC, 7);
-            printf("dat: %d%d.%d%d.\n\r rok: 20%d%d \n\r cas: %d%d:%d%d:%d%d \n\r",
+            printf("dat: %d%d.%d%d.\n\r rok: 20%d%d \n\r den v tydnu: %d%d \n\r cas: %d%d:%d%d:%d%d \n\r",
                 DATA_Z_RTC[4] >> 4, DATA_Z_RTC[4] & 0x0F,
                 DATA_Z_RTC[5] >> 4, DATA_Z_RTC[5] & 0x0F,
                 DATA_Z_RTC[6] >> 4, DATA_Z_RTC[6] & 0x0F,
+                DATA_Z_RTC[3] >> 4, DATA_Z_RTC[3] & 0x0F,
                 DATA_Z_RTC[2] >> 4, DATA_Z_RTC[2] & 0x0F,
                 DATA_Z_RTC[1] >> 4, DATA_Z_RTC[1] & 0x0F,
                 DATA_Z_RTC[0] >> 4, DATA_Z_RTC[0] & 0x0F);
+                //funkce pro kontrolu dne jestli se ma spustit alarm
+                den_v_tydnu = DATA_Z_RTC[3] & 0x07; //maska pro dolni bity 111 (coz odpovida od 1-7 dnu v tydnu) => vraci den v tydnu
+                //printf("%d\n\r", den_v_tydnu);
+                if(den_v_tydnu >= 1 && den_v_tydnu <= 5)
+                {
+                    tyden = true;
+                }
+                if(den_v_tydnu == 6 || den_v_tydnu == 7)
+                {
+                    vikend = true;
+                }
         }
+        //ALARM spousteni a kontrola dne
         if (milis() - time4 > 1000)
         {
             time4 = milis();
             swi2c_read_buf(0x68 << 1, 0x0F, &status_ALARMU, 1);
             if (status_ALARMU & 0x01) //nejnizsi bit
             {
-                printf("Alarm1 on\n\r");
-                alarm = true;
+                if(tyden)
+                {
+                    alarm = true;
+                    tyden = false;
+                }
+                else
+                {
+                    printf("neni tyden\n\r");
+                    swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1); //reset bity alarmy
+                }
             }
             else
             {
-                printf("Alarm1 off\n\r");
+                printf("AS1 off\n\r");
             }
             if (status_ALARMU & 0x02) //druhy nejnizsi bit
             {
-                printf("Alarm2 on\n\r");
-                alarm = true;
+                if(vikend)
+                {
+                    alarm = true;
+                    vikend = false;
+                }
+                else
+                {
+                    printf("neni vikend\n\r");
+                    swi2c_write_buf(0x68 << 1, 0x0F, &reset_status, 1); //reset bity alarmy
+                }
             }
             else
             {
-                printf("Alarm2 off\n\r");
+                printf("AS2 off\n\r");
             }
         }
         
